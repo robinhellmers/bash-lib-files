@@ -84,32 +84,40 @@ Strictness:
 "
 
 register_function_flags 'is_linux_path' \
-                        '-s' '--strictness' 'true' \
-                        "Strictness of checking: 'loose' or 'strict' (default)"
+                        '-d' '--directory' 'false' \
+                        "Given path is expected to be a directory. (Default)" \
+                        '-f' '--file' 'false' \
+                        "Given path is expected to be a file." \
+                        '-e' '--exists' 'false' \
+                        "Check if given directory/file exists."
 
 is_linux_path()
 {
-    local path strictness
+    local path strictness check_if_existing
     _handle_args_is_linux_path "$@"
 
-    if [[ "$strictness" == 'loose' ]]
+    if [[ "$check_if_existing" != 'true' ]]
     then
-        # Only check if there exists forward slashes
-        [[ "$path" =~ / ]]
+        # Only check if it looks like a linux path, not allowing spaces
+        [[ "$path" =~ ^(/[^/ ]*)+/?$ ]]
         return
     fi
 
-    if [[ -f "$path" ]]
-    then
-        echo 1
-        [[ -d "$(dirname "$path")" ]]
-        return
-    fi
-
-    [[ -d "$path" ]]
-    return
+    case "$path_type" in
+        'file')
+            [[ -f "$path" ]]
+            return
+            ;;
+        'directory')
+            [[ -d "$path" ]]
+            return
+            ;;
+        *)
+            echo_error "Unhandled 'path_type': '$path_type'"
+            exit 1
+            ;;
+    esac
 }
-
 
 _handle_args_is_linux_path()
 {
@@ -121,21 +129,30 @@ _handle_args_is_linux_path()
     ###
 
     ###
-    # -s, --strictness
-    if [[ "$strictness_flag" == 'true' ]]
+    # -d, --directory, -f --file
+    if [[ "$directory_flag" == 'true' && "$file_flag" == 'true' ]]
     then
-        strictness="$strictness_flag_value"
+        invalid_function_usage 2 'is_linux_path' \
+            "Both --directory and --file flags given."
+        exit 1
+    fi
 
-        case "$strictness" in
-            'loose')
-                ;;
-            'strict')
-                ;;
-            '')
-                strictness='strict'
-                ;;
-            *)
-                echo_error "Given strictness for is_linux_path() unknown: $strictness"
+    path_type='directory'
+    if [[ "$file_flag" == 'true' ]]
+    then
+        path_type='file'
+    fi
+    ###
+
+    ###
+    # -e, --exists
+    check_if_existing='false'
+    if [[ "$exists_flag" == 'true' ]]
+    then
+        check_if_existing='true'
+    fi
+    ###
+}
                 ;;
         esac
     fi
