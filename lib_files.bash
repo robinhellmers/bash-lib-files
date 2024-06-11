@@ -153,8 +153,146 @@ _handle_args_is_linux_path()
     fi
     ###
 }
+
+register_help_text 'generate_unique_filename' \
+"generate_unique_filename <base_path> <suffix>
+
+Generates unique filenames based on naming template '<base_path><suffix><num>'
+where it counts <num> from 1 upwards. Using the first, non-existing filename
+based on the files in the filesystem.
+
+Arguments:
+<base_path>:
+    Path including filename. Excluding suffix.
+<suffix>:
+    Suffix to be used with an number after it to make it unique.
+    That is <suffix><num> whereas the <num> will be generated.
+
+Example:
+    <base_path>: \"\$HOME/myfile.sh\"
+    <suffix>: '.backup-'
+
+    Which generates files in the style
+        \$HOME/myfile.sh.backup-3
+"
+
+register_function_flags 'generate_unique_filename' \
+                        '-m' '--max-backups' 'true' \
+                        "Maximum number of backups. (Default: 100)"
+
+# Function to generate a unique filename
+generate_unique_filename()
+{
+    local base_path suffix path_os_type max_backups
+    _handle_args_generate_unique_filename "$@"
+
+    return_code=255
+
+    local counter=1
+    local file_exists='true'
+
+    until [[ "$file_exists" == 'false' ]]
+    do
+        if (( counter > max_backups ))
+        then
+            return_code=1
+            echo_error "Maximum number of backups for '${base_path}${suffix}': $max_backups"
+            return 1
+        fi
+
+        new_path="${base_path}${suffix}${counter}"
+        ((counter++))
+
+        case "$path_os_type" in
+            'windows')
+                [[ -f "$(wslpath -u "$new_path")" ]] || file_exists='false'
+                ;;
+            'linux')
+                [[ -f "$new_path" ]] || file_exists='false'
+                ;;
+            *)
                 ;;
         esac
+    done
+
+    return_code=0
+    generated_filename="$new_path"
+}
+
+_handle_args_generate_unique_filename()
+{
+    _handle_args 'generate_unique_filename' "$@"
+
+    ###
+    # Non-flagged arguments
+    base_path="${non_flagged_args[0]}"
+    suffix="${non_flagged_args[1]}"
+
+    local base_path_dir="$(dirname "$base_path")"
+
+    if [[ -z "$base_path" ]]
+    then
+        invalid_function_usage 2 'generate_unique_filename' \
+            "Given <base_path> is empty."
+        exit 1
+    elif [[ -z "$suffix" ]]
+    then
+        invalid_function_usage 2 'generate_unique_filename' \
+            "Given <suffix> is empty."
+        exit 1
+    fi
+
+    path_os_type=''
+
+    if is_windows_path "$base_path"
+    then
+        local base_path_linux_style="$(wslpath -u "$base_path")"
+        if ! [[ -f "$base_path_linux_style" ]] &&
+           ! [[ -d "$(dirname "$base_path_linux_style")" ]]
+        then
+            invalid_function_usage 2 'generate_unique_filename' \
+                "Directory/file of given base path does not exist: '$(dirname "$base_path_linux_style")'"
+            exit 1
+        fi
+
+        path_os_type='windows'
+
+    elif is_linux_path --directory "$base_path_dir"
+    then
+        if ! is_linux_path --directory "$base_path_dir" --exists
+        then
+            invalid_function_usage 2 'generate_unique_filename' \
+                "Directory of given base path does not exist: '$base_path_dir'"
+            exit 1
+        fi
+
+        path_os_type='linux'
+
+    else
+        invalid_function_usage 2 'generate_unique_filename' \
+            "Could not recognize <base_path> as a Linux or Windows path: $base_path"
+        exit 1
+    fi
+
+    ###
+
+    ###
+    # Flags
+    max_backups=100
+
+    if [[ "$max_backups_flag" == 'true' ]]
+    then
+        local regex_number='^[0-9]+$'
+
+        if ! [[ $max_backups_flag_value =~ $regex_number ]] ||
+             (( max_backups_flag_value <= 0 ))
+        then
+            invalid_function_usage 2 'generate_unique_filename' \
+                "Given max backups value (-m/--max-backups) is not an positive integer: '$max_backups_flag_value'"
+            exit 1
+        fi
+
+        max_backups="$max_backups_flag_value"
     fi
     ###
 }
