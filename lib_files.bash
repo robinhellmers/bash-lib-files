@@ -40,3 +40,129 @@ init_lib
 #####################
 ### Library start ###
 #####################
+
+###
+# List of functions for usage outside of lib
+#
+# - 
+###
+
+register_help_text 'is_linux_path' \
+"is_linux_path <path>
+
+Arguments:
+<path>:
+    Path to check
+"
+
+register_function_flags 'is_linux_path' \
+                        '-s' '--strictness' 'true' \
+                        "Strictness of checking: 'loose'/'strict'"
+
+is_windows_path()
+{
+    _handle_args 'is_windows_path' "$@"
+
+    local path="$1"
+    # Check if path contains backslashes (typically Windows)
+    [[ "$path" =~ \\ ]]
+}
+
+register_help_text 'is_linux_path' \
+"is_linux_path <path>
+
+Checks if path is a Linux path based on the strictness given.
+
+Arguments:
+<path>:
+    Path to check
+
+Strictness:
+'loose':
+    Only checks if there exists forward slashes
+'strict':
+    Actually checks if there is as path
+"
+
+register_function_flags 'is_linux_path' \
+                        '-s' '--strictness' 'true' \
+                        "Strictness of checking: 'loose' or 'strict' (default)"
+
+is_linux_path()
+{
+    local path strictness
+    _handle_args_is_linux_path "$@"
+
+    if [[ "$strictness" == 'loose' ]]
+    then
+        # Only check if there exists forward slashes
+        [[ "$path" =~ / ]]
+        return
+    fi
+
+    if [[ -f "$path" ]]
+    then
+        [[ -d "$(dirname "$path")" ]]
+        return
+    fi
+
+    [[ -d "$path" ]]
+    return
+}
+
+_handle_args_is_linux_path()
+{
+    _handle_args 'is_linux_path' "$@"
+
+    path="${non_flagged_args[0]}"
+    ###
+    # -s, --strictness
+    
+    if [[ "$strictness_flag" == 'true' ]]
+    then
+        strictness="$strictness_flag_value"
+
+        case "$strictness" in
+            'loose')
+                ;;
+            'strict')
+                ;;
+            '')
+                strictness='strict'
+                ;;
+            *)
+                echo_error "Given strictness for is_linux_path() unknown: $strictness"
+                ;;
+        esac
+    fi
+
+    ###
+}
+
+
+register_help_text 'generate_unique_filename' \
+"generate_unique_filename <
+
+"
+
+register_function_flags 'generate_unique_filename'
+
+# Function to generate a unique filename
+generate_unique_filename()
+{
+    _handle_args 'generate_unique_filename' "$@"
+    local base_path="${non_flagged_args[0]}"
+    local suffix="${non_flagged_args[1]}"
+    local windows_indicator="${non_flagged_args[2]}"
+
+    local counter=1
+    local new_path="${base_path}${suffix}"
+
+    while [[ -f "$(wslpath -u "$new_path")" ]] && (( counter < 100 ))
+    do
+        new_path="${base_path}${suffix}${counter}"
+        ((counter++))
+    done
+
+    echo "$new_path"
+}
